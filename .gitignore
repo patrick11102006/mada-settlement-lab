@@ -1,0 +1,24 @@
+﻿# Secrets (CRITIQUE)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+
+# IDE / OS
+.vscode/settings.json
+.DS_Store
+
+# Logs
+*.log
