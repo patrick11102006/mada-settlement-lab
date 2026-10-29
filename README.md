@@ -15,3 +15,5 @@ declarations financieres **synthetiques**.
 - Frontend : Next.js
 - Observabilite : Prometheus + Grafana
 - CI/CD : GitHub Actions (Gitleaks, Semgrep, Trivy)
+
+![Branch protection activée sur main et develop](image.png)
