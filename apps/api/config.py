@@ -13,6 +13,11 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+psycopg://msl:msl@localhost:5432/msl"
 
+        # JWT
+    JWT_SECRET_KEY: str = "dev-only-secret"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60
+
 
 @lru_cache
 def get_settings() -> Settings:

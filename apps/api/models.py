@@ -21,6 +21,7 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(200))
+    password_hash: Mapped[str] = mapped_column(String(255))  # <-- NOUVEAU
     role: Mapped[str] = mapped_column(String(20), default="declarant")
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(
