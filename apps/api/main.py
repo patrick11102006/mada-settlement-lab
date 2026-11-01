@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .db import engine, get_db
 from .models import User
+from .routers import auth, users
 
 app = FastAPI(
     title="Mada Settlement Lab",
@@ -18,6 +19,9 @@ app = FastAPI(
         "de déclarations financières synthétiques. Données fictives uniquement."
     ),
 )
+
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(users.router, prefix="/users", tags=["users"])
 
 
 @app.get("/health", tags=["ops"])
