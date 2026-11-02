@@ -1,0 +1,45 @@
+services:
+  # ==========================
+  # BASE DE DONNÉES POSTGRESQL
+  # ==========================
+  db:
+    image: postgres:16-alpine
+    container_name: msl-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-msl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-msl_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-msl}
+    # Note : on mappe le port 5433 de Windows vers le 5432 interne pour éviter le conflit
+    ports:
+      - "5433:5432"
+    volumes:
+      - msl_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U msl -d msl"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================
+  # API FASTAPI
+  # ==========================
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: msl-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # ATTENTION : Dans Docker, on utilise le nom du service "db" et le port interne "5432"
+      - DATABASE_URL=postgresql+psycopg://msl:msl_dev_password@db:5432/msl
+      - APP_ENV=dev
+      - JWT_SECRET_KEY=une-cle-secrete-tres-longue-a-changer-en-production-123456
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  msl_pgdata:
