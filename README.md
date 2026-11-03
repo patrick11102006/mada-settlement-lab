@@ -1,5 +1,7 @@
 ﻿# Mada Settlement Lab
 
+[![CI Pipeline](https://github.com/patrick11102006/mada-settlement-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/patrick11102006/mada-settlement-lab/actions/workflows/ci.yml)
+
 Plateforme academique de collecte, validation, consolidation et audit de
 declarations financieres **synthetiques**.
 
