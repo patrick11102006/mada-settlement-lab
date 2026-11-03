@@ -1,0 +1,60 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # ==========================================
+  # JOB 1 : TESTS ET QUALITÉ DU CODE
+  # ==========================================
+  test:
+    name: Tests & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+
+      - name: Installation de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installation des dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lancement des tests avec Pytest
+        run: |
+          pytest tests/ -v
+
+  # ==========================================
+  # JOB 2 : SÉCURITÉ (DevSecOps)
+  # ==========================================
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Nécessaire pour Gitleaks (scan de tout l'historique)
+
+      - name: Scan des secrets (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan des vulnérabilités (Trivy FS)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1' # Bloquant si vulnérabilité CRITICAL trouvée
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
