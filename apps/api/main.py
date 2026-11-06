@@ -1,38 +1,44 @@
-"""Point d'entrée FastAPI — Mada Settlement Lab.
+"""Point d'entrée FastAPI - Mada Settlement Lab."""
+from contextlib import asynccontextmanager
 
-Sprint 1 : /health, /ready
-Sprint 2 : /users (liste les utilisateurs depuis PostgreSQL)
-"""
 from fastapi import Depends, FastAPI
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .db import engine, get_db
-from .models import User
-from .routers import auth, users
+from .db import get_db
+from .routers import auth, submissions, users
+from .storage import init_storage
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        init_storage()
+    except Exception as exc:  # MinIO peut démarrer plus lentement que l'API
+        print(f"[warn] init_storage a échoué : {exc}")
+    yield
+
 
 app = FastAPI(
     title="Mada Settlement Lab",
-    version="0.2.0",
+    version="0.3.0",
     description=(
         "Plateforme académique de collecte, validation, consolidation et audit "
         "de déclarations financières synthétiques. Données fictives uniquement."
     ),
+    lifespan=lifespan,
 )
-
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(users.router, prefix="/users", tags=["users"])
 
 
 @app.get("/health", tags=["ops"])
 def health() -> dict:
     """Liveness probe."""
-    return {"status": "ok", "service": "mada-settlement-lab", "version": "0.2.0"}
+    return {"status": "ok", "service": "mada-settlement-lab", "version": "0.3.0"}
 
 
 @app.get("/ready", tags=["ops"])
 def ready(db: Session = Depends(get_db)) -> dict:
-    """Readiness probe — vérifie la connexion DB."""
+    """Readiness probe : vérifie la connexion à la base."""
     try:
         db.execute(text("SELECT 1"))
         return {"status": "ready", "database": "ok"}
@@ -40,28 +46,11 @@ def ready(db: Session = Depends(get_db)) -> dict:
         return {"status": "not-ready", "database": "error", "error": str(exc)}
 
 
-@app.get("/users", tags=["users"])
-def list_users(db: Session = Depends(get_db)) -> list[dict]:
-    """Liste les utilisateurs (vide au début — on en ajoutera un à l'étape 8)."""
-    rows = db.scalars(select(User).order_by(User.created_at)).all()
-    return [
-        {
-            "id": str(u.id),
-            "email": u.email,
-            "full_name": u.full_name,
-            "role": u.role,
-            "active": u.active,
-        }
-        for u in rows
-    ]
-
-
 @app.get("/", tags=["ops"])
 def root() -> dict:
-    return {
-        "message": "Mada Settlement Lab API",
-        "docs": "/docs",
-        "health": "/health",
-        "ready": "/ready",
-        "users": "/users",
-    }
+    return {"message": "Mada Settlement Lab API", "docs": "/docs", "health": "/health"}
+
+
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(submissions.router, prefix="/submissions", tags=["submissions"])
