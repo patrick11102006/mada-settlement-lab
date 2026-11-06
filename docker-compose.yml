@@ -31,15 +31,41 @@ services:
     container_name: msl-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       # ATTENTION : Dans Docker, on utilise le nom du service "db" et le port interne "5432"
       - DATABASE_URL=postgresql+psycopg://msl:msl_dev_password@db:5432/msl
       - APP_ENV=dev
       - JWT_SECRET_KEY=une-cle-secrete-tres-longue-a-changer-en-production-123456
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
     depends_on:
       db:
         condition: service_healthy
 
+
+  # ==========================
+  # STOCKAGE OBJET (MINIO)
+  # ==========================
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    container_name: msl-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Console Web
+    volumes:
+      - msl_miniodata:/data
+    
+# N'oublie pas d'ajouter le volume en bas du fichier !
 volumes:
   msl_pgdata:
+  msl_miniodata:  # <-- NOUVEAU VOLUME
+
+
+

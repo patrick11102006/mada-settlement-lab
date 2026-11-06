@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+        # MinIO
+    MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_ROOT_USER: str = "minioadmin"
+    MINIO_ROOT_PASSWORD: str = "minioadmin"
+    MINIO_BUCKET: str = "submissions"
+
 
 @lru_cache
 def get_settings() -> Settings:
