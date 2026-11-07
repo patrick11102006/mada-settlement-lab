@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && python -c "import fastapi, uvicorn, boto3, sqlalchemy, psycopg; print('deps OK')"
+RUN pip install --no-cache-dir --default-timeout=120 --retries 10 -r requirements.txt \
+    && python -c "import fastapi, uvicorn, boto3, sqlalchemy, psycopg, pandas, pandera; print('deps OK')"
 
 COPY apps ./apps
 COPY alembic.ini .

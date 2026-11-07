@@ -1,12 +1,8 @@
-"""Modèles SQLAlchemy — on démarre avec `users` uniquement.
-
-Les autres tables (organizations, submissions, ...) viendront dans les
-prochains sprints. Ne pas tout mettre aujourd'hui.
-"""
+"""Modèles SQLAlchemy."""
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,27 +12,32 @@ from .db import Base
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(200))
-    password_hash: Mapped[str] = mapped_column(String(255))  # <-- NOUVEAU
+    password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default="declarant")
     active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 
 class Submission(Base):
     __tablename__ = "submissions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     filename: Mapped[str] = mapped_column(String(255))
     checksum: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(20), default="RECU")
-    received_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ValidationError(Base):
+    __tablename__ = "validation_errors"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    submission_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("submissions.id"), index=True)
+    row_number: Mapped[int] = mapped_column(Integer)
+    field: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    rule_code: Mapped[str] = mapped_column(String(100))
+    message: Mapped[str] = mapped_column(Text)
