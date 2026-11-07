@@ -22,3 +22,5 @@ node_modules/
 
 # Logs
 *.log
+
+requirements.freeze.bak
