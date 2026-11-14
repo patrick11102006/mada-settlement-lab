@@ -1,8 +1,9 @@
 """Modèles SQLAlchemy."""
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -61,3 +62,21 @@ class ValidationError(Base):
     field: Mapped[str | None] = mapped_column(String(100), nullable=True)
     rule_code: Mapped[str] = mapped_column(String(100))
     message: Mapped[str] = mapped_column(Text)
+
+
+class FinancialRecord(Base):
+    """Ligne consolidée. Unique par (dépôt, numéro de ligne) : garantit l'idempotence."""
+
+    __tablename__ = "financial_records"
+    __table_args__ = (
+        UniqueConstraint("submission_id", "row_number", name="uq_record_submission_row"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    submission_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("submissions.id"), index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    row_number: Mapped[int] = mapped_column(Integer)
+    period: Mapped[str] = mapped_column(String(7), index=True)
+    indicator_code: Mapped[str] = mapped_column(String(50), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 4))
+    currency: Mapped[str] = mapped_column(String(3))

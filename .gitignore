@@ -24,3 +24,4 @@ node_modules/
 *.log
 
 requirements.freeze.bak
+perf_10k_*.csv

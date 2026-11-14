@@ -1,0 +1,4 @@
+period,indicator_code,amount,currency
+2026-03,DEPOSITS,1700000.00,MGA
+2026-03,LOANS,860000.25,MGA
+2026-03,NPL_RATIO,0.037,MGA
