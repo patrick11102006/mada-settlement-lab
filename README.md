@@ -27,3 +27,9 @@ declarations financieres **synthetiques**.
 - CI/CD : GitHub Actions (Gitleaks, Semgrep, Trivy)
 
 ![Branch protection activée sur main et develop](image.png)
+
+## Journal d'audit
+
+Les actions sensibles (connexion, dépôt, validation, consolidation, administration, accès refusé)
+produisent un événement chaîné par HMAC-SHA256. Vérification : `python -m apps.api.audit_cli verify`
+(signale l'index de rupture). Limites et choix : voir `docs/adr/0002-audit-hash-chain.md`.
