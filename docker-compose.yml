@@ -40,6 +40,7 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
+      - AUDIT_HMAC_KEY=${AUDIT_HMAC_KEY:-dev-only-audit-key-change-me}
     depends_on:
       db:
         condition: service_healthy
