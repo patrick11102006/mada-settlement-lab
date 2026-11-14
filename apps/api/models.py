@@ -3,7 +3,9 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -80,3 +82,22 @@ class FinancialRecord(Base):
     indicator_code: Mapped[str] = mapped_column(String(50), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 4))
     currency: Mapped[str] = mapped_column(String(3))
+
+
+class AuditEvent(Base):
+    """Evenement d'audit chaine (HMAC-SHA256). Jamais modifie ni supprime par l'application."""
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    seq: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    resource_type: Mapped[str] = mapped_column(String(50))
+    resource_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(10))
+    payload: Mapped[str] = mapped_column(Text)
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    previous_hash: Mapped[str] = mapped_column(String(64))
+    event_hash: Mapped[str] = mapped_column(String(64))
