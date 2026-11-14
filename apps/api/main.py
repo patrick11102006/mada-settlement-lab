@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .db import get_db
-from .routers import admin, auth, submissions, users
+from .routers import admin, auth, records, submissions, users
 from .storage import init_storage
 
 
@@ -21,10 +21,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Mada Settlement Lab",
-    version="0.3.0",
+    version="0.5.0",
     description=(
-        "Plateforme académique de collecte, validation, consolidation et audit "
-        "de déclarations financières synthétiques. Données fictives uniquement."
+        "Plateforme sécurisée de contrôle qualité, de traçabilité et d'audit des données "
+        "financières. Données fictives uniquement."
     ),
     lifespan=lifespan,
 )
@@ -33,7 +33,7 @@ app = FastAPI(
 @app.get("/health", tags=["ops"])
 def health() -> dict:
     """Liveness probe."""
-    return {"status": "ok", "service": "mada-settlement-lab", "version": "0.3.0"}
+    return {"status": "ok", "service": "mada-settlement-lab", "version": "0.5.0"}
 
 
 @app.get("/ready", tags=["ops"])
@@ -53,5 +53,6 @@ def root() -> dict:
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(submissions.router, prefix="/submissions", tags=["submissions"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+app.include_router(submissions.router, prefix="/submissions", tags=["submissions"])
+app.include_router(records.router, prefix="/records", tags=["records"])

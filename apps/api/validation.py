@@ -1,7 +1,7 @@
 """Validation des fichiers CSV de déclaration (Pandera).
 
-La fonction validate_csv est pure : elle prend des octets et renvoie une liste
-d'erreurs. Elle ne touche ni la base ni MinIO, donc elle se teste facilement.
+validate_csv est pure : elle prend des octets et renvoie une liste d'erreurs.
+Elle ne touche ni la base ni MinIO, donc elle se teste facilement.
 """
 import io
 
@@ -13,15 +13,18 @@ except ImportError:  # anciennes versions de pandera
     import pandera as pa
 from pandera.errors import SchemaErrors
 
+from .quality import MAX_AMOUNT, cross_row_rules
+
 REQUIRED_COLUMNS = ["period", "indicator_code", "amount", "currency"]
 ALLOWED_INDICATORS = {"DEPOSITS", "LOANS", "NPL_RATIO"}
 ALLOWED_CURRENCIES = {"MGA", "EUR", "USD"}
-MAX_ERRORS = 1000  # protège la base contre un fichier qui génère des millions d'erreurs
+MAX_ERRORS = 1000  # protège la base contre un fichier qui génère trop d'erreurs
 
 MESSAGES = {
     "PERIOD_FORMAT": "La période doit être au format AAAA-MM (mois de 01 à 12)",
     "INDICATOR_UNKNOWN": "Code indicateur inconnu",
-    "AMOUNT_NOT_NUMERIC": "Le montant doit être un nombre",
+    "AMOUNT_NOT_NUMERIC": "Le montant doit être un nombre fini",
+    "AMOUNT_TOO_LARGE": "Le montant dépasse la limite autorisée (10^16)",
     "AMOUNT_NEGATIVE": "Le montant ne peut pas être négatif",
     "CURRENCY_UNKNOWN": "Devise non autorisée (MGA, EUR ou USD)",
 }
@@ -29,6 +32,12 @@ MESSAGES = {
 
 def _num(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce")
+
+
+def _not_too_large(series: pd.Series) -> pd.Series:
+    """Faux seulement pour une valeur finie dont la valeur absolue dépasse la limite."""
+    a = _num(series).abs()
+    return ~((a >= MAX_AMOUNT) & (a < float("inf")))
 
 
 SCHEMA = pa.DataFrameSchema(
@@ -42,20 +51,17 @@ SCHEMA = pa.DataFrameSchema(
             ]
         ),
         "indicator_code": pa.Column(
-            checks=[
-                pa.Check(lambda s: s.isin(ALLOWED_INDICATORS), name="INDICATOR_UNKNOWN")
-            ]
+            checks=[pa.Check(lambda s: s.isin(ALLOWED_INDICATORS), name="INDICATOR_UNKNOWN")]
         ),
         "amount": pa.Column(
             checks=[
-                pa.Check(lambda s: _num(s).notna(), name="AMOUNT_NOT_NUMERIC"),
+                pa.Check(lambda s: _num(s).abs() < float("inf"), name="AMOUNT_NOT_NUMERIC"),
+                pa.Check(_not_too_large, name="AMOUNT_TOO_LARGE"),
                 pa.Check(lambda s: _num(s).fillna(0) >= 0, name="AMOUNT_NEGATIVE"),
             ]
         ),
         "currency": pa.Column(
-            checks=[
-                pa.Check(lambda s: s.isin(ALLOWED_CURRENCIES), name="CURRENCY_UNKNOWN")
-            ]
+            checks=[pa.Check(lambda s: s.isin(ALLOWED_CURRENCIES), name="CURRENCY_UNKNOWN")]
         ),
     },
     strict=False,
@@ -110,6 +116,9 @@ def validate_csv(content: bytes) -> list[dict]:
             value = str(case["failure_case"])[:80]
             message = f"{MESSAGES.get(code, 'Règle non respectée')} (valeur : {value!r})"
             errors.append(_err(row, str(case["column"]), code, message))
+
+    # Contrôle qualité entre lignes (doublons, ratios hors bornes)
+    errors.extend(cross_row_rules(df, ALLOWED_INDICATORS, ALLOWED_CURRENCIES))
 
     errors.sort(key=lambda e: (e["row_number"], e["field"] or ""))
     return errors[:MAX_ERRORS]
