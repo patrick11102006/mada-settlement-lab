@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..audit import record_event
 from ..db import get_db
 from ..models import Organization, User
 from ..security import ROLES, hash_password, require_role
@@ -30,14 +31,19 @@ class UserCreate(BaseModel):
 def create_organization(
     payload: OrganizationCreate,
     db: Session = Depends(get_db),
-    _admin: User = Depends(require_role("admin")),
+    admin: User = Depends(require_role("admin")),
 ):
+    aid = admin.id
     if db.scalar(select(Organization).where(Organization.code == payload.code)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Code d'organisation déjà utilisé")
     org = Organization(code=payload.code, name=payload.name)
     db.add(org)
     db.commit()
     db.refresh(org)
+    record_event(
+        db, action="ORGANIZATION_CREATED", resource_type="organization", resource_id=str(org.id),
+        actor_id=aid, payload={"code": org.code},
+    )
     return {"id": org.id, "code": org.code, "name": org.name}
 
 
@@ -45,8 +51,9 @@ def create_organization(
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
-    _admin: User = Depends(require_role("admin")),
+    admin: User = Depends(require_role("admin")),
 ):
+    aid = admin.id
     if payload.role not in ROLES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Rôle invalide : {ROLES}")
     if payload.role == "declarant" and payload.organization_id is None:
@@ -65,4 +72,11 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    record_event(
+        db, action="USER_CREATED", resource_type="user", resource_id=str(user.id), actor_id=aid,
+        payload={
+            "email": user.email, "role": user.role,
+            "organization_id": None if user.organization_id is None else str(user.organization_id),
+        },
+    )
     return {"id": user.id, "email": user.email, "role": user.role, "organization_id": user.organization_id}

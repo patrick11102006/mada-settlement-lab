@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    # Journal audit : cle HMAC (hors base de donnees)
+    AUDIT_HMAC_KEY: str = "dev-only-audit-key-change-me"
+
         # MinIO
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ROOT_USER: str = "minioadmin"

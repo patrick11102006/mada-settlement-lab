@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..audit import record_event
 from ..consolidation import ConsolidationError, consolidate_submission
 from ..db import get_db
 from ..models import Submission, User
@@ -25,8 +26,15 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 Mo
 
 def _get_accessible_submission(db: Session, submission_id: uuid.UUID, user: User) -> Submission:
     """Renvoie le dépôt, ou 404 s'il n'existe pas OU si l'utilisateur n'y a pas droit."""
+    uid, role = user.id, user.role
     s = db.get(Submission, submission_id)
-    if s is None or not can_access_submission(user, s):
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Déclaration introuvable")
+    if not can_access_submission(user, s):
+        record_event(
+            db, action="ACCESS_DENIED", resource_type="submission", resource_id=str(submission_id),
+            actor_id=uid, outcome="DENIED", payload={"reason": "other_organization", "role": role},
+        )
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Déclaration introuvable")
     return s
 
@@ -39,6 +47,7 @@ async def upload_submission(
 ):
     if user.organization_id is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Utilisateur sans organisation")
+    uid, org_id = user.id, user.organization_id
 
     filename = (file.filename or "")[:255]
     if not filename.lower().endswith(".csv"):
@@ -49,22 +58,21 @@ async def upload_submission(
 
     checksum = hashlib.sha256(content).hexdigest()
     existing = db.scalar(
-        select(Submission).where(
-            Submission.organization_id == user.organization_id, Submission.checksum == checksum
-        )
+        select(Submission).where(Submission.organization_id == org_id, Submission.checksum == checksum)
     )
     if existing:
+        record_event(
+            db, action="SUBMISSION_DUPLICATE", resource_type="submission",
+            resource_id=str(existing.id), actor_id=uid, outcome="DENIED",
+            payload={"checksum": checksum},
+        )
         raise HTTPException(status.HTTP_409_CONFLICT, f"Fichier déjà soumis (ID: {existing.id})")
 
     # Clé d'objet maîtrisée par le serveur : jamais le nom de fichier de l'utilisateur
-    upload_file(content, f"{user.organization_id}/{checksum}.csv")
+    upload_file(content, f"{org_id}/{checksum}.csv")
 
     submission = Submission(
-        organization_id=user.organization_id,
-        submitted_by=user.id,
-        filename=filename,
-        checksum=checksum,
-        status="RECU",
+        organization_id=org_id, submitted_by=uid, filename=filename, checksum=checksum, status="RECU",
     )
     db.add(submission)
     try:
@@ -73,27 +81,49 @@ async def upload_submission(
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Fichier déjà soumis")
     db.refresh(submission)
+    sub_id = submission.id
+    record_event(
+        db, action="SUBMISSION_RECEIVED", resource_type="submission", resource_id=str(sub_id),
+        actor_id=uid,
+        payload={"filename": filename, "checksum": checksum, "size_bytes": len(content),
+                 "organization_id": str(org_id)},
+    )
 
     submission.status = "EN_VALIDATION"
     db.commit()
     errors = validate_csv(content)
 
     if errors:
-        db.add_all([ValidationErrorRow(submission_id=submission.id, **e) for e in errors])
+        db.add_all([ValidationErrorRow(submission_id=sub_id, **e) for e in errors])
         submission.status = "REJETE"
     else:
         submission.status = "ACCEPTE"
     submission.processed_at = datetime.now(timezone.utc)
     db.commit()
+    record_event(
+        db, action="SUBMISSION_VALIDATED", resource_type="submission", resource_id=str(sub_id),
+        actor_id=uid, payload={"status": submission.status, "error_count": len(errors)},
+    )
 
     # Consolidation automatique. En cas d'échec, le dépôt reste ACCEPTE (reprise possible).
-    records_count = 0
+    records_count, consolidated = 0, False
     if submission.status == "ACCEPTE":
         try:
             records_count = consolidate_submission(db, submission, content)
-        except Exception:
+            consolidated = True
+        except Exception as exc:
             db.rollback()
-            logger.exception("Consolidation échouée pour le dépôt %s", submission.id)
+            logger.exception("Consolidation échouée pour le dépôt %s", sub_id)
+            record_event(
+                db, action="SUBMISSION_CONSOLIDATION_FAILED", resource_type="submission",
+                resource_id=str(sub_id), actor_id=uid, outcome="FAILURE",
+                payload={"error_type": type(exc).__name__},
+            )
+        if consolidated:
+            record_event(
+                db, action="SUBMISSION_CONSOLIDATED", resource_type="submission",
+                resource_id=str(sub_id), actor_id=uid, payload={"records": records_count},
+            )
 
     return {
         "id": submission.id,
@@ -190,9 +220,10 @@ def get_submission_quality(
 def consolidate(
     submission_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _admin: User = Depends(require_role("admin")),
+    admin: User = Depends(require_role("admin")),
 ):
     """Reprise manuelle de la consolidation (relit le fichier dans MinIO). Idempotent."""
+    aid = admin.id
     s = db.get(Submission, submission_id)
     if s is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Déclaration introuvable")
@@ -208,5 +239,14 @@ def consolidate(
         inserted = consolidate_submission(db, s, content)
     except ConsolidationError as exc:
         db.rollback()
+        record_event(
+            db, action="SUBMISSION_CONSOLIDATION_FAILED", resource_type="submission",
+            resource_id=str(submission_id), actor_id=aid, outcome="FAILURE",
+            payload={"error_type": "ConsolidationError", "manual": True},
+        )
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
-    return {"id": s.id, "status": s.status, "inserted": inserted}
+    record_event(
+        db, action="SUBMISSION_CONSOLIDATED", resource_type="submission",
+        resource_id=str(submission_id), actor_id=aid, payload={"records": inserted, "manual": True},
+    )
+    return {"id": submission_id, "status": "CONSOLIDE", "inserted": inserted}

@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .db import get_db
-from .routers import admin, auth, records, submissions, users
+from .routers import admin, audit, auth, records, submissions, users
 from .storage import init_storage
 
 
@@ -56,3 +56,4 @@ app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(submissions.router, prefix="/submissions", tags=["submissions"])
 app.include_router(records.router, prefix="/records", tags=["records"])
+app.include_router(audit.router, prefix="/audit", tags=["audit"])
