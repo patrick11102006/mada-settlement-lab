@@ -75,7 +75,7 @@ def consolidate_submission(db: Session, submission: Submission, content: bytes) 
             .values(chunk)
             .on_conflict_do_nothing(constraint="uq_record_submission_row")
         )
-        inserted += db.execute(stmt).rowcount
+        inserted += len(db.execute(stmt.returning(FinancialRecord.id)).all())
 
     submission.status = "CONSOLIDE"
     db.commit()

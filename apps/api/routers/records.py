@@ -68,12 +68,20 @@ def summary(
             FinancialRecord.currency,
             func.count().label("lines"),
             func.sum(FinancialRecord.amount).label("total"),
+            func.avg(FinancialRecord.amount).label("average"),
         )
         .group_by(FinancialRecord.period, FinancialRecord.indicator_code, FinancialRecord.currency)
         .order_by(FinancialRecord.period, FinancialRecord.indicator_code)
     )
     q = _scoped(q, user)
     return [
-        {"period": p, "indicator_code": i, "currency": c, "lines": n, "total": str(t)}
-        for p, i, c, n, t in db.execute(q).all()
+        {
+            "period": p,
+            "indicator_code": i,
+            "currency": c,
+            "lines": n,
+            "total": None if i == "NPL_RATIO" else str(t),  # un ratio ne s'additionne pas
+            "average": str(a),
+        }
+        for p, i, c, n, t, a in db.execute(q).all()
     ]

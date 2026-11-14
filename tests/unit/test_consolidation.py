@@ -55,3 +55,43 @@ def test_submission_without_organization_is_refused():
 ])
 def test_new_endpoints_require_token(method, url):
     assert getattr(client, method)(url).status_code == 401
+
+
+class _FakeResult:
+    def __init__(self, n):
+        self._n = n
+
+    def all(self):
+        return [object()] * self._n
+
+
+class _FakeDB:
+    """Simule la base : renvoie n lignes insérées (RETURNING), 0 en cas de conflit."""
+
+    def __init__(self, inserted_per_batch):
+        self._n = inserted_per_batch
+        self.committed = False
+
+    def execute(self, stmt):
+        return _FakeResult(self._n)
+
+    def commit(self):
+        self.committed = True
+
+
+def _accepted():
+    return SimpleNamespace(status="ACCEPTE", organization_id=uuid.uuid4(), id=uuid.uuid4())
+
+
+def test_inserted_count_comes_from_returning_not_rowcount():
+    content = (HEADER + "2026-01,LOANS,1,MGA\n2026-01,DEPOSITS,2,MGA\n2026-01,NPL_RATIO,0.1,MGA\n").encode()
+    s, db = _accepted(), _FakeDB(3)
+    assert consolidate_submission(db, s, content) == 3
+    assert s.status == "CONSOLIDE" and db.committed
+
+
+def test_conflicts_insert_nothing_but_submission_becomes_consolidated():
+    content = (HEADER + "2026-01,LOANS,1,MGA\n").encode()
+    s, db = _accepted(), _FakeDB(0)
+    assert consolidate_submission(db, s, content) == 0
+    assert s.status == "CONSOLIDE"
